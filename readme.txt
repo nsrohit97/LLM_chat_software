@@ -21,5 +21,5 @@ Technologies Used:
 Setup:
 Clone this repository to your local machine.
 Install the required dependencies by running pip install -r requirements.txt.
-Start the Flask server by running python app.py.
-Open the provided HTML file (index.html) in your web browser.
+Start the Flask server by running poetry run python main.py.
+Open http://localhost:5000/ in your web browser.
