@@ -1,56 +1,82 @@
-from flask import Flask, request, jsonify, send_from_directory
+# Import necessary modules
+from flask import Flask, request, jsonify, stream_with_context, Response, send_from_directory
 import requests
 from flask_cors import CORS
 import yaml
+import json
 
 # Initialize Flask application
 app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Resource Sharing (CORS)
+CORS(app)  # Enable CORS
 
 # Load configuration from YAML file
-with open("settings-vllm-sample.yaml", 'r') as file:
+with open("settings-vllm.yaml", 'r') as file:
     config = yaml.safe_load(file)
 
-# Extract necessary configuration variables
+# Retrieve configuration parameters
 OPENROUTER_API_KEY = config['openai']['api_key']
 MODEL_NAME = config['openai']['model']
 API_BASE = config['openai']['api_base']
 REQUEST_TIMEOUT = config['openai']['request_timeout']
 
+# In-memory chat history to store user interactions
+chat_history = []
+
+# Route to serve the main HTML page
 @app.route('/')
 def index():
-    """Serve the index.html file when accessing the root URL."""
     return send_from_directory('.', 'index.html')
 
+# Endpoint for handling user messages and providing responses
 @app.route('/chat', methods=['POST'])
 def chat():
-    """Handle POST requests to the /chat endpoint."""
-    app.logger.info("Entering chat function")
-    data = request.json  # Get JSON data from the request
-    user_message = data.get('message', '')  # Extract user message
+    # Extract user message from request
+    data = request.json
+    user_message = data.get('message', '')
+    
+    # Append user message to chat history
+    chat_history.append({"role": "user", "content": user_message})
+    
     try:
-        response = get_response_from_llm(user_message)  # Get response from LLM
-        app.logger.info("Response received from LLM")
-        return jsonify({'response': response})  # Return response as JSON
+        # Stream response from LLM
+        response = stream_with_context(get_response_from_llm(user_message))
+        return Response(response, content_type='text/event-stream')
     except Exception as e:
-        app.logger.error(f"Error occurred: {e}")  # Log any errors
-        return jsonify({'error': str(e)}), 500  # Return error as JSON with status 500
+        # Return error message if there is an exception
+        return jsonify({'error': str(e)}), 500
 
-def get_response_from_llm(message: str) -> str:
-    """Send a message to the language model and return the response."""
+# Function to retrieve response from the Language Model (LLM)
+def get_response_from_llm(message: str):
+    # Construct API request URL and headers
     url = f"{API_BASE}/chat/completions"
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json"
     }
+    
+    # Prepare payload with user message and chat history
     payload = {
         "model": MODEL_NAME,
-        "messages": [{"role": "user", "content": message}]
+        "messages": chat_history
     }
-    response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT)
-    response.raise_for_status()  # Raise an error for bad responses
-    response_json = response.json()
-    return response_json['choices'][0]['message']['content']  # Extract and return the response content
+    
+    # Make a POST request to the LLM API
+    response = requests.post(url, headers=headers, json=payload, timeout=REQUEST_TIMEOUT, stream=True)
+    response.raise_for_status()  # Raise an HTTPError for bad responses
+    
+    # Stream response from LLM API line by line
+    for line in response.iter_lines():
+        if line:
+            decoded_line = line.decode('utf-8')
+            try:
+                # Parse JSON response and yield message content
+                response_json = json.loads(decoded_line)
+                chat_history.append(response_json['choices'][0]['message'])
+                yield f"data: {json.dumps(response_json['choices'][0]['message'])}\n\n"
+            except json.JSONDecodeError as e:
+                # Continue iteration if there is an error parsing JSON
+                continue
 
+# Entry point for running the Flask application
 if __name__ == '__main__':
-    app.run(debug=True)  # Run the Flask application in debug mode
+    app.run(debug=True)

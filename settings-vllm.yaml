@@ -1,0 +1,14 @@
+server:
+  env_name: production
+
+llm:
+  mode: openailike
+  max_new_tokens: 2048
+  tokenizer: mistralai/Mistral-7B-Instruct-v0.3
+  temperature: 0.7
+
+openai:
+  api_key: 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
+  model: mistralai/mistral-7b-instruct-v0.3
+  api_base: https://openrouter.ai/api/v1
+  request_timeout: 300.0

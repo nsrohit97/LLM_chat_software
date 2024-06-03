@@ -3,115 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chat with AI</title>
+    <title>LLM Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         body {
             font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
             margin: 0;
-            padding: 0;
-            box-sizing: border-box;
         }
         .chat-container {
-            max-width: 600px;
-            margin: 20px auto;
-            padding: 20px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
+            width: 400px;
+            max-width: 100%;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 600px; /* Add a fixed height */
         }
-        .chat-message {
-            margin-bottom: 10px;
-        }
-        .chat-message label {
-            font-weight: bold;
-        }
-        .chat-message input[type="text"] {
-            width: calc(100% - 70px);
-            padding: 8px;
-            margin-top: 5px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
-        .chat-message button {
-            padding: 8px 15px;
-            margin-top: 5px;
-            border: none;
+        .chat-header {
             background-color: #007bff;
             color: #fff;
-            border-radius: 5px;
-            cursor: pointer;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.2em;
+            font-weight: bold;
         }
-        .chat-response {
-            margin-top: 10px;
-            border-radius: 5px;
+        .messages {
+            flex: 1;
             padding: 10px;
+            overflow-y: auto; /* Enable vertical scrolling */
+            background-color: #f9f9f9;
         }
-        .loader {
-            border: 4px solid #f3f3f3; /* Light grey */
-            border-top: 4px solid #3498db; /* Blue */
+        .message {
+            margin: 10px 0;
+            display: flex;
+        }
+        .message.user {
+            justify-content: flex-end;
+        }
+        .message.bot {
+            justify-content: flex-start;
+        }
+        .message-content {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+        }
+        .message.user .message-content {
+            background-color: #007bff;
+            color: #fff;
+            border-bottom-right-radius: 0;
+        }
+        .message.bot .message-content {
+            background-color: #e5e5ea;
+            color: #333;
+            border-bottom-left-radius: 0;
+        }
+        .chat-input-container {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .chat-input-container input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+        }
+        .chat-input-container button {
+            background-color: #007bff;
+            border: none;
+            padding: 10px;
+            margin-left: 10px;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            margin-right: 10px;
-            vertical-align: middle;
+            color: #fff;
+            cursor: pointer;
+            outline: none;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .chat-input-container button:hover {
+            background-color: #0056b3;
         }
     </style>
 </head>
 <body>
     <div class="chat-container">
-        <h1>Chat with AI</h1>
-        <div class="chat-message">
-            <label for="message">Message:</label>
-            <input type="text" id="message" name="message" required>
-            <button id="send-btn" type="submit">Send</button>
+        <div class="chat-header">
+            LLM Chat
         </div>
-        <div class="chat-response" id="response"></div>
+        <div class="messages" id="messages"></div>
+        <div class="chat-input-container">
+            <input type="text" id="userInput" placeholder="Type your message here..." />
+            <button onclick="sendMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
     </div>
 
     <script>
-        document.getElementById('send-btn').addEventListener('click', function() {
-            sendMessage();
-        });
+        const messagesDiv = document.getElementById('messages');
 
-        document.getElementById('message').addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
-        });
+        async function sendMessage() {
+            const userInput = document.getElementById('userInput');
+            const message = userInput.value;
+            if (!message.trim()) return;
 
-        function sendMessage() {
-            const message = document.getElementById('message').value;
-            const responseDiv = document.getElementById('response');
-            responseDiv.innerHTML = '<div class="loader"></div> Loading...';
+            userInput.value = '';
 
-            fetch('http://localhost:5000/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ message: message })
-            })
-            .then(response => response.json())
-            .then(data => {
-                responseDiv.innerHTML = '';
-                displayResponse(data.response);
-            })
-            .catch(error => {
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'message user';
+            userMessageDiv.innerHTML = `<div class="message-content">${message}</div>`;
+            messagesDiv.appendChild(userMessageDiv);
+            scrollToBottom();
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+
+                if (!response.ok) {
+                    throw new Error('An error occurred while processing your request.');
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let chatResponse = '';
+                const botMessageDiv = document.createElement('div');
+                botMessageDiv.className = 'message bot';
+                botMessageDiv.innerHTML = `<div class="message-content"></div>`;
+                messagesDiv.appendChild(botMessageDiv);
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+
+                    const lines = chunk.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const jsonString = line.slice(6).trim();
+                            if (jsonString) {
+                                try {
+                                    const json = JSON.parse(jsonString);
+                                    if (json && json.content) {
+                                        chatResponse += json.content;
+                                        botMessageDiv.querySelector('.message-content').innerText = chatResponse;
+                                        scrollToBottom();
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing JSON:', e);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
                 console.error('Error:', error);
-                responseDiv.innerHTML = 'An error occurred';
-            });
+            }
         }
 
-        function displayResponse(response) {
-            const responseDiv = document.getElementById('response');
-            const p = document.createElement('p');
-            p.textContent = response;
-            responseDiv.appendChild(p);
+        function scrollToBottom() {
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
     </script>
 </body>
